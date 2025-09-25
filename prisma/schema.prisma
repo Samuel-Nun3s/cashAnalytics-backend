@@ -1,0 +1,459 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================================
+// ENTIDADES DE SAAS - PLANOS E ASSINATURAS
+// ================================
+
+model Plan {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  price       Decimal
+  currency    String   @default("BRL")
+  interval    PlanInterval // MONTHLY, YEARLY
+  features    Json     // Recursos do plano em JSON
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Limites do plano
+  maxAccounts         Int     @default(3)
+  maxCategories       Int     @default(10)
+  maxPortfolios       Int     @default(1)
+  maxStocksPerPortfolio Int   @default(10)
+  hasAiReports        Boolean @default(false)
+  aiReportsPerMonth   Int     @default(0)
+  hasAdvancedAnalysis Boolean @default(false)
+  hasPrioritySupport  Boolean @default(false)
+
+  // Relacionamentos
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                String           @id @default(cuid())
+  userId            String           @unique // Um usuário tem uma assinatura ativa
+  planId            String
+  status            SubscriptionStatus
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean         @default(false)
+  canceledAt         DateTime?
+  trialStart         DateTime?
+  trialEnd           DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  // Dados de pagamento
+  stripeSubscriptionId String? @unique
+  stripeCustomerId     String?
+  lastPaymentDate      DateTime?
+  nextPaymentDate      DateTime?
+
+  // Relacionamentos
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id])
+  paymentHistory PaymentHistory[]
+
+  @@map("subscriptions")
+}
+
+model PaymentHistory {
+  id             String        @id @default(cuid())
+  subscriptionId String
+  amount         Decimal
+  currency       String        @default("BRL")
+  status         PaymentStatus
+  paymentMethod  String?       // card, pix, boleto
+  stripePaymentIntentId String? @unique
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+
+  // Relacionamentos
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("payment_history")
+}
+
+// ================================
+// ENTIDADES DE USUÁRIO
+// ================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  subscription     Subscription?
+  accounts         Account[]
+  categories       Category[]
+  bills            Bill[]
+  revenues         Revenue[]
+  portfolios       Portfolio[]
+  aiReports        AiReport[]
+  userPreferences  UserPreferences?
+  usageLimits      UsageLimits?
+  stockWatchlist   StockWatchlist[]
+
+  @@map("users")
+}
+
+model UserPreferences {
+  id                   String  @id @default(cuid())
+  userId               String  @unique
+  reportFrequency      String  @default("MONTHLY") // WEEKLY, MONTHLY, QUARTERLY
+  enableNotifications  Boolean @default(true)
+  timezone             String  @default("America/Sao_Paulo")
+  dashboardTheme       String  @default("LIGHT") // LIGHT, DARK
+  defaultCurrency      String  @default("BRL")
+  emailDigestTime      String  @default("08:00")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model UsageLimits {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  accountsUsed    Int      @default(0)
+  categoriesUsed  Int      @default(0)
+  portfoliosUsed  Int      @default(0)
+  aiReportsUsed   Int      @default(0) // Reset mensalmente
+  lastResetDate   DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("usage_limits")
+}
+
+// ================================
+// ENTIDADES DE CONTAS E CATEGORIAS
+// ================================
+
+model Account {
+  id          String      @id @default(cuid())
+  userId      String
+  name        String
+  accountType AccountType
+  balance     Decimal     @default(0)
+  description String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relacionamentos
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bills    Bill[]
+  revenues Revenue[]
+
+  @@map("accounts")
+}
+
+model Category {
+  id          String       @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  color       String?      @default("#3B82F6")
+  type        CategoryType // EXPENSE, INCOME
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relacionamentos
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bills    Bill[]
+  revenues Revenue[]
+
+  @@map("categories")
+}
+
+// ================================
+// ENTIDADES DE CONTAS A PAGAR E RECEITAS
+// ================================
+
+model Bill {
+  id          String     @id @default(cuid())
+  userId      String
+  accountId   String?
+  categoryId  String?
+  title       String
+  description String?
+  amount      Decimal
+  dueDate     DateTime
+  isPaid      Boolean    @default(false)
+  paidAt      DateTime?
+  isRecurring Boolean    @default(false)
+  recurrence  Recurrence?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relacionamentos
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account  Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@map("bills")
+}
+
+model Revenue {
+  id          String     @id @default(cuid())
+  userId      String
+  accountId   String?
+  categoryId  String?
+  title       String
+  description String?
+  amount      Decimal
+  receivedAt  DateTime
+  isRecurring Boolean    @default(false)
+  recurrence  Recurrence?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relacionamentos
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account  Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@map("revenues")
+}
+
+// ================================
+// ENTIDADES DE CACHE E CONFIGURAÇÕES DE API
+// ================================
+
+model ApiConfiguration {
+  id        String   @id @default(cuid())
+  provider  String   @unique // "ALPHA_VANTAGE", "YAHOO_FINANCE", "BRAPI", etc.
+  apiKey    String?
+  baseUrl   String
+  rateLimit Int      @default(5) // Requests por minuto
+  isActive  Boolean  @default(true)
+  
+  // Configurações específicas do provedor
+  config    Json     @default("{}")
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("api_configurations")
+}
+
+model StockWatchlist {
+  id        String   @id @default(cuid())
+  userId    String
+  symbol    String
+  exchange  String
+  
+  // Configurações de monitoramento
+  priceAlertHigh  Decimal?
+  priceAlertLow   Decimal?
+  enableAlerts    Boolean  @default(false)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, symbol, exchange])
+  @@map("stock_watchlist")
+}
+
+model Portfolio {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolioStocks  PortfolioStock[]
+
+  @@map("portfolios")
+}
+
+model Stock {
+  id          String  @id @default(cuid())
+  symbol      String  @unique // Ex: PETR4, VALE3, AAPL
+  exchange    String  // B3, NASDAQ, NYSE, etc.
+  
+  // Dados em cache da API (atualizados periodicamente)
+  name        String?
+  sector      String?
+  description String?
+  lastPrice   Decimal?
+  change      Decimal?
+  changePercent Decimal?
+  
+  // Controle de cache
+  lastApiUpdate DateTime?
+  isActive      Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relacionamentos
+  portfolioStocks PortfolioStock[]
+  stockPrices     StockPrice[]
+  aiReports       AiReport[]
+
+  @@map("stocks")
+}
+
+model PortfolioStock {
+  id          String  @id @default(cuid())
+  portfolioId String
+  stockId     String
+  quantity    Int
+  avgPrice    Decimal // Preço médio de compra
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  stock     Stock     @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@unique([portfolioId, stockId])
+  @@map("portfolio_stocks")
+}
+
+model StockPrice {
+  id        String   @id @default(cuid())
+  stockId   String
+  
+  // Dados históricos mais detalhados
+  openPrice   Decimal?
+  highPrice   Decimal
+  lowPrice    Decimal
+  closePrice  Decimal
+  volume      BigInt?
+  marketCap   Decimal?
+  
+  date      DateTime
+  source    String   @default("API") // API, MANUAL, etc.
+  createdAt DateTime @default(now())
+
+  // Relacionamentos
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@unique([stockId, date])
+  @@map("stock_prices")
+}
+
+// ================================
+// ENTIDADES DE RELATÓRIOS DE IA
+// ================================
+
+model AiReport {
+  id            String       @id @default(cuid())
+  userId        String
+  stockId       String
+  reportType    ReportType
+  title         String
+  summary       String
+  content       String       // Análise detalhada em JSON ou texto
+  sentiment     Sentiment?   // POSITIVE, NEGATIVE, NEUTRAL
+  confidence    Float?       // 0 a 1
+  sources       String[]     // URLs das fontes analisadas
+  generatedAt   DateTime     @default(now())
+  periodStart   DateTime
+  periodEnd     DateTime
+  isActive      Boolean      @default(true)
+
+  // Relacionamentos
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@map("ai_reports")
+}
+
+// ================================
+// ENUMS
+// ================================
+
+enum PlanInterval {
+  monthly
+  yearly
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+  past_due
+  unpaid
+  trialing
+  incomplete
+}
+
+enum PaymentStatus {
+  pending
+  succeeded
+  failed
+  canceled
+  refunded
+}
+
+enum AccountType {
+  checking    // Conta Corrente
+  savings     // Poupança
+  credit_card // Cartão de Crédito
+  investiment  // Investimento
+  cash        // Dinheiro
+  other       // Outros
+}
+
+enum CategoryType {
+  expense // Despesa
+  income  // Receita
+}
+
+enum Recurrence {
+  weekly
+  monthly
+  quarterly
+  yearly
+}
+
+enum ReportType {
+  monthly     // Relatório mensal
+  news        // Análise de notícias
+  earnings    // Análise de resultados
+  technical   // Análise técnica
+  fundamental // Análise fundamentalista
+}
+
+enum Sentiment {
+  positive
+  negative
+  neutral
+}
