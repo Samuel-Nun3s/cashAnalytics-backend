@@ -99,6 +99,7 @@ model User {
   email     String   @unique
   name      String
   password  String
+  role      Role?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -114,6 +115,7 @@ model User {
   userPreferences  UserPreferences?
   usageLimits      UsageLimits?
   stockWatchlist   StockWatchlist[]
+  refreshTokens    RefreshTokens[]
 
   @@map("users")
 }
@@ -132,7 +134,7 @@ model UserPreferences {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("user_preferences")
+  @@map("userPreferences")
 }
 
 model UsageLimits {
@@ -148,7 +150,22 @@ model UsageLimits {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("usage_limits")
+  @@map("usageLimits")
+}
+
+model RefreshTokens {
+  id         String @id @default(cuid())
+  userId     String
+  token      String @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  revokedAt  DateTime @default(null)
+  deviceInfo String
+  ipAddress  String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refreshTokens")
 }
 
 // ================================
@@ -263,7 +280,7 @@ model ApiConfiguration {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("api_configurations")
+  @@map("apiConfigurations")
 }
 
 model StockWatchlist {
@@ -284,7 +301,7 @@ model StockWatchlist {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, symbol, exchange])
-  @@map("stock_watchlist")
+  @@map("stockWatchlist")
 }
 
 model Portfolio {
@@ -344,7 +361,7 @@ model PortfolioStock {
   stock     Stock     @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
   @@unique([portfolioId, stockId])
-  @@map("portfolio_stocks")
+  @@map("portfolioStocks")
 }
 
 model StockPrice {
@@ -367,7 +384,7 @@ model StockPrice {
   stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
   @@unique([stockId, date])
-  @@map("stock_prices")
+  @@map("stockPrices")
 }
 
 // ================================
@@ -394,7 +411,7 @@ model AiReport {
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
-  @@map("ai_reports")
+  @@map("aiReports")
 }
 
 // ================================
@@ -456,4 +473,9 @@ enum Sentiment {
   positive
   negative
   neutral
+}
+
+enum Role {
+  admin
+  client
 }
