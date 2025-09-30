@@ -159,7 +159,7 @@ model RefreshTokens {
   token      String @unique
   expiresAt  DateTime
   createdAt  DateTime @default(now())
-  revokedAt  DateTime @default(null)
+  revokedAt  DateTime
   deviceInfo String
   ipAddress  String
 

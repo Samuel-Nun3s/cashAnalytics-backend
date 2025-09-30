@@ -1,4 +1,4 @@
-import JWTUtils from "../utils/jwt";
+import JWTUtils from "../utils/jwt.js";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
