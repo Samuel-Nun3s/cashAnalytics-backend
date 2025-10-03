@@ -75,7 +75,9 @@ class AuthService {
         data: {
           token: refreshToken,
           userId: user.id,
-          expiresAt
+          expiresAt,
+          deviceInfo: "teste",
+          ipAddress:  "teste"
         }
       });
 

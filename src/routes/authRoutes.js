@@ -8,7 +8,7 @@ const authRoutes = Router();
 // Rotas publicas (sem autenticacao)
 authRoutes.post('/register', validateRegister, AuthController.register);
 authRoutes.post('/login', validateLogin, AuthController.login);
-authRoutes.post('/refresh', AuthController.refreshToken);
+authRoutes.post('/refresh', AuthController.refreshTokens);
 
 // Rotas protegidas (com autenticacao)
 authRoutes.post('/logout', authMiddleware, AuthController.logout);

@@ -64,9 +64,12 @@ class AuthController {
   }
 
   // POST /api/auth/refresh
-  static async refreshToken(req, res) {
+  static async refreshTokens(req, res) {
     try {
       const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+
+      console.log("refreshToken => ", refreshToken);
+      console.log("Teste");
 
       if (!refreshToken) {
         return res.status(401).json({
